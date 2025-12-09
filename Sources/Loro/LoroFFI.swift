@@ -7,8 +7,8 @@ import Foundation
 // Depending on the consumer's build setup, the low-level FFI code
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
-#if canImport(loroFFI)
-import loroFFI
+#if canImport(LoroFFI)
+import LoroFFI
 #endif
 
 fileprivate extension RustBuffer {
@@ -857,7 +857,7 @@ fileprivate struct UniffiCallbackInterfaceChangeAncestorsTraveler {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceChangeAncestorsTraveler = UniffiVTableCallbackInterfaceChangeAncestorsTraveler(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceChangeAncestorsTraveler = UniffiVTableCallbackInterfaceChangeAncestorsTraveler(
         travel: { (
             uniffiHandle: UInt64,
             change: RustBuffer,
@@ -899,7 +899,7 @@ private func uniffiCallbackInitChangeAncestorsTraveler() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeChangeAncestorsTraveler: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<ChangeAncestorsTraveler>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<ChangeAncestorsTraveler>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = ChangeAncestorsTraveler
@@ -1247,7 +1247,7 @@ public func FfiConverterTypeConfigure_lower(_ value: Configure) -> UnsafeMutable
 
 
 
-public protocol ContainerIdLike: Any {
+public protocol ContainerIdLike {
     
     func asContainerId(ty: ContainerType)  -> ContainerId
     
@@ -1320,7 +1320,7 @@ fileprivate struct UniffiCallbackInterfaceContainerIdLike {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceContainerIdLike = UniffiVTableCallbackInterfaceContainerIdLike(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceContainerIdLike = UniffiVTableCallbackInterfaceContainerIdLike(
         asContainerId: { (
             uniffiHandle: UInt64,
             ty: RustBuffer,
@@ -1362,7 +1362,7 @@ private func uniffiCallbackInitContainerIdLike() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeContainerIdLike: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<ContainerIdLike>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<ContainerIdLike>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = ContainerIdLike
@@ -2015,7 +2015,7 @@ fileprivate struct UniffiCallbackInterfaceEphemeralSubscriber {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceEphemeralSubscriber = UniffiVTableCallbackInterfaceEphemeralSubscriber(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceEphemeralSubscriber = UniffiVTableCallbackInterfaceEphemeralSubscriber(
         onEphemeralEvent: { (
             uniffiHandle: UInt64,
             event: RustBuffer,
@@ -2057,7 +2057,7 @@ private func uniffiCallbackInitEphemeralSubscriber() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeEphemeralSubscriber: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<EphemeralSubscriber>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<EphemeralSubscriber>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = EphemeralSubscriber
@@ -2183,7 +2183,7 @@ fileprivate struct UniffiCallbackInterfaceFirstCommitFromPeerCallback {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceFirstCommitFromPeerCallback = UniffiVTableCallbackInterfaceFirstCommitFromPeerCallback(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceFirstCommitFromPeerCallback = UniffiVTableCallbackInterfaceFirstCommitFromPeerCallback(
         onFirstCommitFromPeer: { (
             uniffiHandle: UInt64,
             payload: RustBuffer,
@@ -2225,7 +2225,7 @@ private func uniffiCallbackInitFirstCommitFromPeerCallback() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeFirstCommitFromPeerCallback: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<FirstCommitFromPeerCallback>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<FirstCommitFromPeerCallback>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = FirstCommitFromPeerCallback
@@ -2281,11 +2281,10 @@ public func FfiConverterTypeFirstCommitFromPeerCallback_lower(_ value: FirstComm
 
 public protocol FractionalIndexProtocol : AnyObject {
     
-    func toString()  -> String
-    
 }
 
 open class FractionalIndex:
+    CustomStringConvertible,
     FractionalIndexProtocol {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
@@ -2351,13 +2350,14 @@ public static func fromHexString(str: String) -> FractionalIndex {
     
 
     
-open func toString() -> String {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_loro_ffi_fn_method_fractionalindex_to_string(self.uniffiClonePointer(),$0
+    open var description: String {
+        return try!  FfiConverterString.lift(
+            try! rustCall() {
+    uniffi_loro_ffi_fn_method_fractionalindex_uniffi_trait_display(self.uniffiClonePointer(),$0
     )
-})
 }
-    
+        )
+    }
 
 }
 
@@ -2594,6 +2594,177 @@ public func FfiConverterTypeFrontiers_lower(_ value: Frontiers) -> UnsafeMutable
 
 
 
+public protocol JsonPathSubscriber : AnyObject {
+    
+    /**
+     * Called when a change may affect the subscribed JSONPath query.
+     */
+    func onJsonpathChanged() 
+    
+}
+
+open class JsonPathSubscriberImpl:
+    JsonPathSubscriber {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_loro_ffi_fn_clone_jsonpathsubscriber(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_loro_ffi_fn_free_jsonpathsubscriber(pointer, $0) }
+    }
+
+    
+
+    
+    /**
+     * Called when a change may affect the subscribed JSONPath query.
+     */
+open func onJsonpathChanged() {try! rustCall() {
+    uniffi_loro_ffi_fn_method_jsonpathsubscriber_on_jsonpath_changed(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceJsonPathSubscriber {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceJsonPathSubscriber = UniffiVTableCallbackInterfaceJsonPathSubscriber(
+        onJsonpathChanged: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeJsonPathSubscriber.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onJsonpathChanged(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterTypeJsonPathSubscriber.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface JsonPathSubscriber: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitJsonPathSubscriber() {
+    uniffi_loro_ffi_fn_init_callback_vtable_jsonpathsubscriber(&UniffiCallbackInterfaceJsonPathSubscriber.vtable)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeJsonPathSubscriber: FfiConverter {
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<JsonPathSubscriber>()
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = JsonPathSubscriber
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> JsonPathSubscriber {
+        return JsonPathSubscriberImpl(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: JsonPathSubscriber) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> JsonPathSubscriber {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: JsonPathSubscriber, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJsonPathSubscriber_lift(_ pointer: UnsafeMutableRawPointer) throws -> JsonPathSubscriber {
+    return try FfiConverterTypeJsonPathSubscriber.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeJsonPathSubscriber_lower(_ value: JsonPathSubscriber) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeJsonPathSubscriber.lower(value)
+}
+
+
+
+
 public protocol LocalEphemeralListener : AnyObject {
     
     func onEphemeralUpdate(update: Data) 
@@ -2666,7 +2837,7 @@ fileprivate struct UniffiCallbackInterfaceLocalEphemeralListener {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceLocalEphemeralListener = UniffiVTableCallbackInterfaceLocalEphemeralListener(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceLocalEphemeralListener = UniffiVTableCallbackInterfaceLocalEphemeralListener(
         onEphemeralUpdate: { (
             uniffiHandle: UInt64,
             update: RustBuffer,
@@ -2708,7 +2879,7 @@ private func uniffiCallbackInitLocalEphemeralListener() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeLocalEphemeralListener: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<LocalEphemeralListener>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<LocalEphemeralListener>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = LocalEphemeralListener
@@ -2834,7 +3005,7 @@ fileprivate struct UniffiCallbackInterfaceLocalUpdateCallback {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceLocalUpdateCallback = UniffiVTableCallbackInterfaceLocalUpdateCallback(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceLocalUpdateCallback = UniffiVTableCallbackInterfaceLocalUpdateCallback(
         onLocalUpdate: { (
             uniffiHandle: UInt64,
             update: RustBuffer,
@@ -2876,7 +3047,7 @@ private func uniffiCallbackInitLocalUpdateCallback() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeLocalUpdateCallback: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<LocalUpdateCallback>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<LocalUpdateCallback>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = LocalUpdateCallback
@@ -3848,6 +4019,14 @@ public protocol LoroDocProtocol : AnyObject {
      * For example, you could store user names in a `LoroMap` using `PeerID` as the key and the `UserID` as the value.
      */
     func subscribeFirstCommitFromPeer(callback: FirstCommitFromPeerCallback)  -> Subscription
+    
+    /**
+     * Subscribe to updates that might affect the given JSONPath query.
+     *
+     * The callback may fire false positives; it is intended as a lightweight notification so
+     * callers can debounce or throttle before re-running JSONPath themselves.
+     */
+    func subscribeJsonpath(path: String, callback: JsonPathSubscriber) throws  -> Subscription
     
     /**
      * Subscribe the local update of the document.
@@ -5005,6 +5184,21 @@ open func subscribeFirstCommitFromPeer(callback: FirstCommitFromPeerCallback) ->
     return try!  FfiConverterTypeSubscription.lift(try! rustCall() {
     uniffi_loro_ffi_fn_method_lorodoc_subscribe_first_commit_from_peer(self.uniffiClonePointer(),
         FfiConverterTypeFirstCommitFromPeerCallback.lower(callback),$0
+    )
+})
+}
+    
+    /**
+     * Subscribe to updates that might affect the given JSONPath query.
+     *
+     * The callback may fire false positives; it is intended as a lightweight notification so
+     * callers can debounce or throttle before re-running JSONPath themselves.
+     */
+open func subscribeJsonpath(path: String, callback: JsonPathSubscriber)throws  -> Subscription {
+    return try  FfiConverterTypeSubscription.lift(try rustCallWithError(FfiConverterTypeLoroError.lift) {
+    uniffi_loro_ffi_fn_method_lorodoc_subscribe_jsonpath(self.uniffiClonePointer(),
+        FfiConverterString.lower(path),
+        FfiConverterTypeJsonPathSubscriber.lower(callback),$0
     )
 })
 }
@@ -7026,11 +7220,6 @@ public protocol LoroTextProtocol : AnyObject {
     func toDelta()  -> [TextDelta]
     
     /**
-     * Get the text content of the text container.
-     */
-    func toString()  -> String
-    
-    /**
      * Unmark a range of text with a key and a value.
      *
      * You can use it to remove highlights, bolds or links
@@ -7076,6 +7265,7 @@ public protocol LoroTextProtocol : AnyObject {
 }
 
 open class LoroText:
+    CustomStringConvertible,
     LoroTextProtocol {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
@@ -7532,16 +7722,6 @@ open func toDelta() -> [TextDelta] {
 }
     
     /**
-     * Get the text content of the text container.
-     */
-open func toString() -> String {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_loro_ffi_fn_method_lorotext_to_string(self.uniffiClonePointer(),$0
-    )
-})
-}
-    
-    /**
      * Unmark a range of text with a key and a value.
      *
      * You can use it to remove highlights, bolds or links
@@ -7610,6 +7790,14 @@ open func updateByLine(s: String, options: UpdateOptions)throws  {try rustCallWi
 }
 }
     
+    open var description: String {
+        return try!  FfiConverterString.lift(
+            try! rustCall() {
+    uniffi_loro_ffi_fn_method_lorotext_uniffi_trait_display(self.uniffiClonePointer(),$0
+    )
+}
+        )
+    }
 
 }
 
@@ -8445,7 +8633,7 @@ public func FfiConverterTypeLoroUnknown_lower(_ value: LoroUnknown) -> UnsafeMut
 
 
 
-public protocol LoroValueLike: Any {
+public protocol LoroValueLike {
     
     func asLoroValue()  -> LoroValue
     
@@ -8517,7 +8705,7 @@ fileprivate struct UniffiCallbackInterfaceLoroValueLike {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceLoroValueLike = UniffiVTableCallbackInterfaceLoroValueLike(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceLoroValueLike = UniffiVTableCallbackInterfaceLoroValueLike(
         asLoroValue: { (
             uniffiHandle: UInt64,
             uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
@@ -8557,7 +8745,7 @@ private func uniffiCallbackInitLoroValueLike() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeLoroValueLike: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<LoroValueLike>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<LoroValueLike>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = LoroValueLike
@@ -8685,7 +8873,7 @@ fileprivate struct UniffiCallbackInterfaceOnPop {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceOnPop = UniffiVTableCallbackInterfaceOnPop(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceOnPop = UniffiVTableCallbackInterfaceOnPop(
         onPop: { (
             uniffiHandle: UInt64,
             undoOrRedo: RustBuffer,
@@ -8731,7 +8919,7 @@ private func uniffiCallbackInitOnPop() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeOnPop: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<OnPop>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<OnPop>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = OnPop
@@ -8860,7 +9048,7 @@ fileprivate struct UniffiCallbackInterfaceOnPush {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceOnPush = UniffiVTableCallbackInterfaceOnPush(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceOnPush = UniffiVTableCallbackInterfaceOnPush(
         onPush: { (
             uniffiHandle: UInt64,
             undoOrRedo: RustBuffer,
@@ -8906,7 +9094,7 @@ private func uniffiCallbackInitOnPush() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeOnPush: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<OnPush>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<OnPush>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = OnPush
@@ -9032,7 +9220,7 @@ fileprivate struct UniffiCallbackInterfacePreCommitCallback {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfacePreCommitCallback = UniffiVTableCallbackInterfacePreCommitCallback(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfacePreCommitCallback = UniffiVTableCallbackInterfacePreCommitCallback(
         onPreCommit: { (
             uniffiHandle: UInt64,
             payload: RustBuffer,
@@ -9074,7 +9262,7 @@ private func uniffiCallbackInitPreCommitCallback() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypePreCommitCallback: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<PreCommitCallback>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<PreCommitCallback>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = PreCommitCallback
@@ -9345,7 +9533,7 @@ fileprivate struct UniffiCallbackInterfaceSubscriber {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceSubscriber = UniffiVTableCallbackInterfaceSubscriber(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceSubscriber = UniffiVTableCallbackInterfaceSubscriber(
         onDiff: { (
             uniffiHandle: UInt64,
             diff: RustBuffer,
@@ -9387,7 +9575,7 @@ private func uniffiCallbackInitSubscriber() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeSubscriber: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<Subscriber>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<Subscriber>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = Subscriber
@@ -10083,7 +10271,7 @@ fileprivate struct UniffiCallbackInterfaceUnsubscriber {
 
     // Create the VTable using a series of closures.
     // Swift automatically converts these into C callback functions.
-    static var vtable: UniffiVTableCallbackInterfaceUnsubscriber = UniffiVTableCallbackInterfaceUnsubscriber(
+    nonisolated(unsafe) static var vtable: UniffiVTableCallbackInterfaceUnsubscriber = UniffiVTableCallbackInterfaceUnsubscriber(
         onUnsubscribe: { (
             uniffiHandle: UInt64,
             uniffiOutReturn: UnsafeMutableRawPointer,
@@ -10123,7 +10311,7 @@ private func uniffiCallbackInitUnsubscriber() {
 @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeUnsubscriber: FfiConverter {
-    fileprivate static var handleMap = UniffiHandleMap<Unsubscriber>()
+    nonisolated(unsafe) fileprivate static var handleMap = UniffiHandleMap<Unsubscriber>()
 
     typealias FfiType = UnsafeMutableRawPointer
     typealias SwiftType = Unsubscriber
@@ -16558,7 +16746,7 @@ private enum InitializationResult {
 }
 // Use a global variable to perform the versioning checks. Swift ensures that
 // the code inside is only computed once.
-private var initializationResult: InitializationResult = {
+nonisolated(unsafe) private var initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 26
     // Get the scaffolding contract version by calling the into the dylib
@@ -16674,9 +16862,6 @@ private var initializationResult: InitializationResult = {
     if (uniffi_loro_ffi_checksum_method_firstcommitfrompeercallback_on_first_commit_from_peer() != 54327) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_loro_ffi_checksum_method_fractionalindex_to_string() != 5688) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_loro_ffi_checksum_method_frontiers_encode() != 14564) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -16687,6 +16872,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_frontiers_to_vec() != 15210) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_loro_ffi_checksum_method_jsonpathsubscriber_on_jsonpath_changed() != 36440) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_localephemerallistener_on_ephemeral_update() != 58755) {
@@ -16954,6 +17142,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_lorodoc_subscribe_first_commit_from_peer() != 65444) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_loro_ffi_checksum_method_lorodoc_subscribe_jsonpath() != 58559) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_lorodoc_subscribe_local_update() != 46483) {
@@ -17332,9 +17523,6 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_lorotext_to_delta() != 49666) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_loro_ffi_checksum_method_lorotext_to_string() != 28280) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_loro_ffi_checksum_method_lorotext_unmark() != 47537) {
@@ -17717,6 +17905,7 @@ private var initializationResult: InitializationResult = {
     uniffiCallbackInitContainerIdLike()
     uniffiCallbackInitEphemeralSubscriber()
     uniffiCallbackInitFirstCommitFromPeerCallback()
+    uniffiCallbackInitJsonPathSubscriber()
     uniffiCallbackInitLocalEphemeralListener()
     uniffiCallbackInitLocalUpdateCallback()
     uniffiCallbackInitLoroValueLike()

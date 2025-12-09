@@ -1,64 +1,67 @@
-name: Pre-release Build and PR
-run-name: Pre-release ${{ github.ref_name }}
+name: Release
 
 on:
   push:
     tags:
-      - '*-pre-release'
-
-permissions:
-  contents: write
-  pull-requests: write
-  actions: read
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.10.3)'
+        required: true
 
 jobs:
+  # Build static libraries for each platform
   build-macos:
     runs-on: macos-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin,aarch64-apple-ios,x86_64-apple-ios-sim,aarch64-apple-ios-sim
 
-      - name: Build macOS/iOS static libs and Swift bindings
+      - name: Build universal macOS library
         run: |
           cd loro-swift
-
           cargo build --release --target aarch64-apple-darwin
           cargo build --release --target x86_64-apple-darwin
-          cargo build --release --target aarch64-apple-ios
-          cargo build --release --target x86_64-apple-ios-sim
-          cargo build --release --target aarch64-apple-ios-sim
-
-          cargo build --release --features cli
-          cargo run --release --features=cli --bin uniffi-bindgen generate \
-            --library target/release/libloro_swift.dylib \
-            --language swift \
-            --out-dir ../artifacts
-
           mkdir -p ../artifacts/macos
           lipo -create \
             target/aarch64-apple-darwin/release/libloro_swift.a \
             target/x86_64-apple-darwin/release/libloro_swift.a \
             -output ../artifacts/macos/libloro_swift.a
 
+      - name: Build iOS libraries
+        run: |
+          cd loro-swift
+          cargo build --release --target aarch64-apple-ios
+          cargo build --release --target x86_64-apple-ios-sim
+          cargo build --release --target aarch64-apple-ios-sim
+
           mkdir -p ../artifacts/ios
+          mkdir -p ../artifacts/ios-simulator
+
           cp target/aarch64-apple-ios/release/libloro_swift.a ../artifacts/ios/
 
-          mkdir -p ../artifacts/ios-simulator
           lipo -create \
             target/x86_64-apple-ios-sim/release/libloro_swift.a \
             target/aarch64-apple-ios-sim/release/libloro_swift.a \
             -output ../artifacts/ios-simulator/libloro_swift.a
 
-      - name: Upload macOS/iOS artifacts
-        uses: actions/upload-artifact@v4
+      - name: Generate Swift bindings
+        run: |
+          cd loro-swift
+          cargo build --release --features cli
+          cargo run --release --features=cli --bin uniffi-bindgen generate \
+            --library target/release/libloro_swift.dylib \
+            --language swift \
+            --out-dir ../artifacts
+
+      - uses: actions/upload-artifact@v4
         with:
           name: macos-artifacts
           path: artifacts/
@@ -66,11 +69,9 @@ jobs:
   build-linux-x86_64:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -82,8 +83,7 @@ jobs:
           mkdir -p ../artifacts/linux-x86_64
           cp target/release/libloro_swift.a ../artifacts/linux-x86_64/
 
-      - name: Upload Linux x86_64 artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-x86_64-artifacts
           path: artifacts/
@@ -91,11 +91,9 @@ jobs:
   build-linux-arm64:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -115,8 +113,7 @@ jobs:
           mkdir -p ../artifacts/linux-arm64
           cp target/aarch64-unknown-linux-gnu/release/libloro_swift.a ../artifacts/linux-arm64/
 
-      - name: Upload Linux ARM64 artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: linux-arm64-artifacts
           path: artifacts/
@@ -124,11 +121,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -141,43 +136,35 @@ jobs:
           cp target/release/loro_swift.lib ../artifacts/windows/libloro_swift.lib
           cp target/release/loro_swift.lib ../artifacts/windows/loro_swift.lib
 
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
           path: artifacts/
 
-  combine-and-pr:
-    runs-on: ubuntu-latest
+  # Combine all artifacts into a single artifact bundle
+  create-release:
     needs: [build-macos, build-linux-x86_64, build-linux-arm64, build-windows]
-    permissions:
-      contents: write
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract version from tag
-        id: get_version
-        run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG_NAME%-pre-release}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create artifact bundle
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           BUNDLE="loroFFI.artifactbundle"
 
           mkdir -p "$BUNDLE/include"
@@ -284,71 +271,64 @@ jobs:
             fi
           done
 
-      - name: Zip artifact bundle
-        run: |
-          rm -f loroFFI.artifactbundle.zip
-          zip -r loroFFI.artifactbundle.zip loroFFI.artifactbundle
+          # Create zip
+          zip -r "loroFFI.artifactbundle.zip" "$BUNDLE"
 
-      - name: Calculate SHA256
-        id: sha256
-        run: |
-          CHECKSUM=$(sha256sum loroFFI.artifactbundle.zip | awk '{print $1}')
-          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          # Calculate checksum
+          sha256sum "loroFFI.artifactbundle.zip" > checksum.txt
+          cat checksum.txt
 
-      - name: Upload artifact bundle
-        uses: actions/upload-artifact@v4
+      - name: Update LoroFFI.swift with fixes
+        run: |
+          SWIFT_FILE="artifacts/macos-artifacts/loro.swift"
+
+          # Apply Swift 6 compatibility fixes
+          perl -i -pe 's/canImport\(loroFFI\)/canImport(LoroFFI)/g' "$SWIFT_FILE"
+          perl -i -pe 's/import loroFFI/import LoroFFI/g' "$SWIFT_FILE"
+          perl -i -pe 's/static var vtable:/nonisolated(unsafe) static var vtable:/g' "$SWIFT_FILE"
+          perl -i -pe 's/fileprivate static var handleMap/nonisolated(unsafe) fileprivate static var handleMap/g' "$SWIFT_FILE"
+          perl -i -pe 's/private var initializationResult/nonisolated(unsafe) private var initializationResult/g' "$SWIFT_FILE"
+          perl -i -pe 's/protocol LoroValueLike\s*:\s*AnyObject/protocol LoroValueLike/g' "$SWIFT_FILE"
+          perl -i -pe 's/protocol ContainerIdLike\s*:\s*AnyObject/protocol ContainerIdLike/g' "$SWIFT_FILE"
+
+          cp "$SWIFT_FILE" LoroFFI.swift
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: loroFFI.artifactbundle.zip
-          path: loroFFI.artifactbundle.zip
+          files: |
+            loroFFI.artifactbundle.zip
+            checksum.txt
+            LoroFFI.swift
+          body: |
+            ## Cross-Platform Artifact Bundle
 
-      - name: Update Package.swift and README.md
-        env:
-          VERSION: ${{ steps.get_version.outputs.version }}
-          CHECKSUM: ${{ steps.sha256.outputs.checksum }}
-          REPO: ${{ github.repository }}
-        run: |
-          python - <<'PY'
-          import os, re, pathlib
-          version = os.environ["VERSION"]
-          checksum = os.environ["CHECKSUM"]
-          repo = os.environ["REPO"]
+            This release includes a cross-platform artifact bundle (SE-0482) with support for:
+            - macOS (arm64, x86_64)
+            - iOS (arm64 device, arm64/x86_64 simulator)
+            - Linux (x86_64, arm64)
+            - Windows (x86_64)
 
-          pkg = pathlib.Path("Package.swift")
-          text = pkg.read_text()
-          text = re.sub(r'url: "https://github.com/.*/loroFFI\.artifactbundle\.zip"', f'url: "https://github.com/{repo}/releases/download/{version}/loroFFI.artifactbundle.zip"', text)
-          text = re.sub(r'checksum: "[a-f0-9]*"', f'checksum: "{checksum}"', text)
-          pkg.write_text(text)
+            ### Checksum
+            ```
+            $(cat checksum.txt)
+            ```
 
-          readme = pathlib.Path("README.md")
-          rtext = readme.read_text()
-          rtext = re.sub(r'"https://github.com/loro-dev/loro-swift.git", from: "[0-9.]+"', f'"https://github.com/loro-dev/loro-swift.git", from: "{version}"', rtext)
-          readme.write_text(rtext)
-          PY
+            ### Usage
+            Update your `Package.swift`:
+            ```swift
+            .binaryTarget(
+                name: "LoroFFI",
+                url: "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/loroFFI.artifactbundle.zip",
+                checksum: "$(cut -d' ' -f1 checksum.txt)"
+            )
+            ```
 
-      - name: Commit and push changes to pre-release branch
-        run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git fetch origin pre-release:pre-release || true
-          git checkout -B pre-release "$GITHUB_SHA"
-          git add Package.swift README.md
-          git commit -m "chore: update version to ${VERSION}" || echo "No changes to commit"
-          git push origin pre-release
-
-      - name: Create or update Pull Request to main
-        env:
-          VERSION: ${{ steps.get_version.outputs.version }}
-          CHECKSUM: ${{ steps.sha256.outputs.checksum }}
-        run: |
-          PR_NUMBER=$(gh pr list --base main --head pre-release --state open --json number --jq '.[0].number')
-          BODY="This PR updates Package.swift and README.md to version ${VERSION}.\n\nSHA256 checksum: ${CHECKSUM}.\n\nThe artifact bundle has been uploaded to this workflow run."
-          if [ -z "$PR_NUMBER" ]; then
-            gh pr create \
-              --base main \
-              --head pre-release \
-              --title "Release ${VERSION}" \
-              --body "$BODY"
-          else
-            echo "PR #$PR_NUMBER already exists."
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: |
+            loroFFI.artifactbundle.zip
+            checksum.txt
+            LoroFFI.swift

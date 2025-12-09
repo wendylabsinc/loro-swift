@@ -1,28 +1,84 @@
-name: build-test
+name: swift
+
 on:
+  push:
+    branches: [main, master, develop]
   pull_request:
-    branches: [main]
+    branches: [main, master, develop]
+  workflow_dispatch:
 
 jobs:
-  build-test:
-    runs-on: macos-14
-    env:
-      LOCAL_BUILD: true
-      DEVELOPER_DIR: /Applications/Xcode_15.4.app
+  build-and-test:
+    name: Swift ${{ matrix.swift }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        swift: ["6.2"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: actions-rs/toolchain@v1
+
+      - name: Setup Swift
+        uses: SwiftyLab/setup-swift@v1
         with:
-          profile: minimal
-          toolchain: 1.82.0
-          default: true
-      - name: get xcode information
+          swift-version: ${{ matrix.swift }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Rust version
+        run: rustc --version
+
+      - name: Build artifact bundle (Unix)
+        if: runner.os != 'Windows'
         run: |
-          xcodebuild -version
-          swift --version
-      - name: build xcframework
-        run: ./scripts/build_macos.sh
-      - name: Swift tests
-        run: LOCAL_BUILD=true swift test
+          chmod +x ./scripts/build_artifactbundle.sh
+          ./scripts/build_artifactbundle.sh
+
+      - name: Build artifact bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build_artifactbundle.ps1
+
+      - name: Build
+        run: swift build -c release
+        env:
+          LOCAL_BUILD: "1"
+
+      - name: Run tests
+        if: runner.os != 'Windows'
+        run: swift test
+        env:
+          LOCAL_BUILD: "1"
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          LOCAL_BUILD: "1"
+        run: |
+          $libPath = (Resolve-Path ".\loroFFI.artifactbundle\loroFFI-windows").Path
+          swift test `
+            -Xlinker "/LIBPATH:$libPath"
+
+      - name: Audit undefined symbols (informational)
+        if: runner.os != 'Windows'
+        run: |
+          shopt -s nullglob
+          for lib in loroFFI.artifactbundle/**/*.a; do
+            echo "== $lib =="
+            if command -v llvm-nm >/dev/null 2>&1; then
+              llvm-nm -u "$lib" || true
+            elif command -v nm >/dev/null 2>&1; then
+              nm -u "$lib" || true
+            else
+              echo "No nm available to audit $lib" >&2
+              exit 1
+            fi
+          done

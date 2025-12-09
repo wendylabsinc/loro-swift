@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -6,13 +6,19 @@ import PackageDescription
 
 let FFIbinaryTarget: PackageDescription.Target
 
+// SE-0482: Cross-platform static library support via artifact bundles
+// Supports macOS (arm64/x86_64), iOS (device + simulator), Linux (x86_64/arm64), and Windows (x86_64)
+//
+// For local development or CI, set LOCAL_BUILD=1 and run ./scripts/build_artifactbundle.sh first
+// For releases, the artifact bundle is published to GitHub releases
 if ProcessInfo.processInfo.environment["LOCAL_BUILD"] != nil {
-    FFIbinaryTarget = .binaryTarget(name: "LoroFFI", path: "./loroFFI.xcframework.zip")
-}else {
+    FFIbinaryTarget = .binaryTarget(name: "LoroFFI", path: "./loroFFI.artifactbundle")
+} else {
+    // Cross-platform artifact bundle from GitHub releases
     FFIbinaryTarget = .binaryTarget(
         name: "LoroFFI",
-        url: "https://github.com/loro-dev/loro-swift/releases/download/1.8.1/loroFFI.xcframework.zip",
-        checksum: "6c723580b568aeccd05debc3cb40635912f5a882520cf42fe84c72220edd0f12"
+        url: "https://github.com/wendylabsinc/loro-swift/releases/download/v1.10.3/loroFFI.artifactbundle.zip",
+        checksum: "PLACEHOLDER_UPDATE_AFTER_RELEASE"
     )
 }
 
@@ -24,18 +30,18 @@ let package = Package(
         .visionOS(.v1)
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Loro",
             targets: ["Loro"]),
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         FFIbinaryTarget,
         .target(
             name: "Loro",
-            dependencies: ["LoroFFI"]
+            dependencies: ["LoroFFI"],
+            linkerSettings: [
+                .linkedLibrary("ntdll", .when(platforms: [.windows]))
+            ]
         ),
         .testTarget(
             name: "LoroTests",
